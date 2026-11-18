@@ -160,6 +160,40 @@ function ParentPortalContent() {
     loadMeta();
   }, [studentCode]);
 
+  // Check sessionStorage for verified session flag
+  useEffect(() => {
+    if (!studentCode) return;
+    try {
+      const savedPin = sessionStorage.getItem(`parent_verified_${studentCode}`);
+      if (savedPin) {
+        setLast4Phone(savedPin);
+        setIsVerifying(true);
+        fetch(`/api/parent/${studentCode}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "VERIFY",
+            last4Phone: savedPin,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.verified) {
+              setVerifiedData(data);
+            } else {
+              sessionStorage.removeItem(`parent_verified_${studentCode}`);
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            setIsVerifying(false);
+          });
+      }
+    } catch {
+      // Safe fallback
+    }
+  }, [studentCode]);
+
   // Handle Parent 4-Digit Verification
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
@@ -183,6 +217,9 @@ function ParentPortalContent() {
       const data = await res.json();
       if (data.success && data.verified) {
         setVerifiedData(data);
+        try {
+          sessionStorage.setItem(`parent_verified_${studentCode}`, last4Phone);
+        } catch {}
       } else {
         setVerifyError(data.error || "Verification failed. The 4 digits do not match.");
       }

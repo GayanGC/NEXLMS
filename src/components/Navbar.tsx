@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GraduationCap, Sun, Moon, Menu, X } from "lucide-react";
+import { GraduationCap, Sun, Moon, Menu, X, Users } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 
 const navLinks = [
@@ -24,6 +24,18 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleTabClick = (targetTab: "login" | "register" | "parent") => {
+    if (typeof window !== "undefined") {
+      const el = document.getElementById("login-card");
+      if (el) {
+        window.dispatchEvent(new CustomEvent("nexlms-switch-tab", { detail: targetTab }));
+        el.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.location.href = targetTab === "parent" ? "/#parent-portal" : "/#login-card";
+      }
+    }
+  };
 
   return (
     <header
@@ -74,21 +86,33 @@ export default function Navbar() {
               )}
             </button>
 
+            {/* Parent Portal Link */}
+            <button
+              type="button"
+              onClick={() => handleTabClick("parent")}
+              className="px-3 py-2 text-sm font-medium text-[#0D5C52] hover:text-[#09433c] dark:text-emerald-400 dark:hover:text-emerald-300 flex items-center gap-1.5 transition-colors"
+            >
+              <Users className="w-4 h-4" />
+              <span>Parent Portal</span>
+            </button>
+
             {/* Flat Sign In Link */}
-            <a
-              href="#login-card"
+            <button
+              type="button"
+              onClick={() => handleTabClick("login")}
               className="px-3 py-2 text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white transition-colors"
             >
               Sign In
-            </a>
+            </button>
 
             {/* Solid Register Class CTA Button */}
-            <a
-              href="#login-card"
+            <button
+              type="button"
+              onClick={() => handleTabClick("register")}
               className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-lg text-white bg-[#FF5A26] hover:bg-[#E04818] active:scale-[0.99] shadow-sm transition-colors duration-150 flex items-center justify-center"
             >
               Register Class
-            </a>
+            </button>
           </div>
 
           {/* Mobile hamburger & theme toggle (44px min tap targets) */}
@@ -127,20 +151,37 @@ export default function Navbar() {
             </a>
           ))}
           <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
-            <a
-              href="#login-card"
-              onClick={() => setMobileOpen(false)}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                handleTabClick("parent");
+              }}
+              className="w-full min-h-[44px] flex items-center justify-center gap-2 text-center px-3 text-sm font-medium text-[#0D5C52] dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/80 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30"
+            >
+              <Users className="w-4 h-4" />
+              <span>Parent Portal</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                handleTabClick("login");
+              }}
               className="w-full min-h-[44px] flex items-center justify-center text-center px-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900"
             >
               Sign In
-            </a>
-            <a
-              href="#login-card"
-              onClick={() => setMobileOpen(false)}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                handleTabClick("register");
+              }}
               className="w-full min-h-[44px] flex items-center justify-center text-center px-3 text-sm font-medium text-white bg-[#FF5A26] hover:bg-[#E04818] rounded-lg shadow-sm transition-colors duration-150"
             >
               Register Class
-            </a>
+            </button>
           </div>
         </div>
       )}

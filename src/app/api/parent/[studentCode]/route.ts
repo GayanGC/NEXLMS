@@ -60,14 +60,18 @@ export async function POST(
     const { studentCode } = await params;
     const code = studentCode?.toUpperCase().trim();
     const body = await request.json();
-    const { action, last4Phone } = body;
+    const { action } = body;
+    const rawPhone = (body.phoneOrPin || body.parentPhone || body.last4Phone || "").toString().trim();
+    const digitsOnly = rawPhone.replace(/\D/g, "");
 
-    if (!last4Phone || last4Phone.length !== 4) {
+    if (!digitsOnly || digitsOnly.length < 4) {
       return NextResponse.json(
-        { success: false, error: "Please enter the last 4 digits of the registered parent phone number" },
+        { success: false, error: "Please enter the registered parent phone number or its last 4 digits" },
         { status: 400 }
       );
     }
+
+    const last4 = digitsOnly.slice(-4);
 
     // Verify student and phone
     let student: any = null;
@@ -86,10 +90,16 @@ export async function POST(
 
       if (student) {
         cls = student.class;
-        const phone = student.parentPhone.replace(/\D/g, "");
-        if (!phone.endsWith(last4Phone)) {
+        const phone = (student.parentPhone || "").replace(/\D/g, "");
+        const isMatch =
+          phone.endsWith(last4) &&
+          (digitsOnly.length === 4 ||
+            phone.endsWith(digitsOnly.slice(-9)) ||
+            digitsOnly.endsWith(phone.slice(-9)));
+
+        if (!isMatch) {
           return NextResponse.json(
-            { success: false, error: "Verification failed. The last 4 digits do not match our records." },
+            { success: false, error: "Student code or parent phone number did not match. Please check with your class teacher." },
             { status: 401 }
           );
         }
@@ -125,10 +135,16 @@ export async function POST(
       student = mockStore.students.find((s) => s.studentCode.toUpperCase() === code);
       if (student) {
         cls = mockStore.classes.find((c) => c.id === student.classId);
-        const phone = student.parentPhone.replace(/\D/g, "");
-        if (!phone.endsWith(last4Phone)) {
+        const phone = (student.parentPhone || "").replace(/\D/g, "");
+        const isMatch =
+          phone.endsWith(last4) &&
+          (digitsOnly.length === 4 ||
+            phone.endsWith(digitsOnly.slice(-9)) ||
+            digitsOnly.endsWith(phone.slice(-9)));
+
+        if (!isMatch) {
           return NextResponse.json(
-            { success: false, error: "Verification failed. The last 4 digits do not match our records." },
+            { success: false, error: "Student code or parent phone number did not match. Please check with your class teacher." },
             { status: 401 }
           );
         }
@@ -142,11 +158,14 @@ export async function POST(
     }
 
     if (!student) {
-      return NextResponse.json({ success: false, error: "Student not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Student code or parent phone number did not match. Please check with your class teacher." },
+        { status: 404 }
+      );
     }
 
     // Handle Actions
-    if (action === "VERIFY") {
+    if (!action || action === "VERIFY") {
       return NextResponse.json({
         success: true,
         verified: true,

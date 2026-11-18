@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -16,9 +16,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  GraduationCap,
 } from "lucide-react";
 
-type AuthTab = "login" | "register";
+type AuthTab = "login" | "register" | "parent";
 type ClassScale = "solo" | "mega" | "institute";
 
 function GoogleIcon() {
@@ -50,7 +51,7 @@ export default function HeroSection() {
   const [scale, setScale] = useState<ClassScale>("solo");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Form states
+  // Form states (Teacher & Staff)
   const [phoneOrEmail, setPhoneOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -58,9 +59,32 @@ export default function HeroSection() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
+  // Form states (Parent View)
+  const [parentStudentCode, setParentStudentCode] = useState("");
+  const [parentPhoneOrPin, setParentPhoneOrPin] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Sync tab switching via custom events and URL hashes
+  useEffect(() => {
+    const handleTabSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent<AuthTab>;
+      if (customEvent.detail) {
+        setTab(customEvent.detail);
+        setErrorMessage(null);
+        setSuccessMessage(null);
+      }
+    };
+    window.addEventListener("nexlms-switch-tab", handleTabSwitch);
+    if (typeof window !== "undefined") {
+      if (window.location.hash === "#parent-portal" || window.location.hash === "#parent-view") {
+        setTab("parent");
+      }
+    }
+    return () => window.removeEventListener("nexlms-switch-tab", handleTabSwitch);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +95,54 @@ export default function HeroSection() {
     setLoading(true);
 
     try {
+      if (tab === "parent") {
+        // Parent View Authentication
+        const cleanCode = parentStudentCode.toUpperCase().trim();
+        const cleanPhone = parentPhoneOrPin.trim();
+
+        if (!cleanCode || !cleanPhone) {
+          setErrorMessage("Please enter both Student Code and Parent Mobile Number (or last 4 digits).");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch(`/api/parent/${encodeURIComponent(cleanCode)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "VERIFY",
+            phoneOrPin: cleanPhone,
+            last4Phone: cleanPhone.replace(/\D/g, "").slice(-4),
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success || !data.verified) {
+          setErrorMessage(
+            data.error ||
+              "Student code or parent phone number did not match. Please check with your class teacher."
+          );
+          setLoading(false);
+          return;
+        }
+
+        // Store verified session flag in sessionStorage
+        try {
+          sessionStorage.setItem(
+            `parent_verified_${cleanCode}`,
+            cleanPhone.replace(/\D/g, "").slice(-4)
+          );
+        } catch {
+          // Fallback if sessionStorage is disabled
+        }
+
+        setSuccessMessage(`Verified for ${data.student?.fullName || cleanCode}! Redirecting to child portal...`);
+        setTimeout(() => {
+          router.push(`/parent/${cleanCode}`);
+        }, 500);
+        return;
+      }
+
       if (tab === "login") {
         if (!phoneOrEmail || !password) {
           setErrorMessage("Please enter your phone/email and password.");
@@ -166,8 +238,8 @@ export default function HeroSection() {
               id="login-card"
               className="bg-white border border-zinc-200 shadow-md dark:bg-zinc-900 dark:border-zinc-800 dark:shadow-none rounded-2xl p-5 sm:p-6 max-w-xl w-full"
             >
-              {/* Segmented Tabs (44px min tap targets) */}
-              <div className="grid grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl mb-5 border border-zinc-200/70 dark:border-zinc-700/60">
+              {/* Segmented Tabs (3 tabs with 44px min tap targets) */}
+              <div className="grid grid-cols-3 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl mb-5 border border-zinc-200/70 dark:border-zinc-700/60">
                 <button
                   type="button"
                   disabled={loading}
@@ -176,10 +248,10 @@ export default function HeroSection() {
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className={`min-h-[44px] py-2 text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center justify-center ${
+                  className={`min-h-[44px] px-1 sm:px-2 py-2 text-[11px] sm:text-xs md:text-sm font-medium rounded-lg transition-all flex items-center justify-center text-center leading-tight ${
                     tab === "login"
-                      ? "bg-[#FF5A26] text-white shadow-sm"
-                      : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      ? "bg-[#FF5A26] text-white shadow-sm font-semibold"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100"
                   }`}
                 >
                   Login to Portal
@@ -192,13 +264,29 @@ export default function HeroSection() {
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className={`min-h-[44px] py-2 text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center justify-center ${
+                  className={`min-h-[44px] px-1 sm:px-2 py-2 text-[11px] sm:text-xs md:text-sm font-medium rounded-lg transition-all flex items-center justify-center text-center leading-tight ${
                     tab === "register"
-                      ? "bg-[#FF5A26] text-white shadow-sm"
-                      : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      ? "bg-[#FF5A26] text-white shadow-sm font-semibold"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100"
                   }`}
                 >
                   Register Class
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setTab("parent");
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className={`min-h-[44px] px-1 sm:px-2 py-2 text-[11px] sm:text-xs md:text-sm font-medium rounded-lg transition-all flex items-center justify-center text-center leading-tight ${
+                    tab === "parent"
+                      ? "bg-[#0D5C52] text-white shadow-sm font-semibold"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100"
+                  }`}
+                >
+                  Parent View
                 </button>
               </div>
 
@@ -249,7 +337,51 @@ export default function HeroSection() {
 
               {/* Inputs */}
               <form onSubmit={handleSubmit} className="space-y-3.5">
-                {tab === "register" ? (
+                {tab === "parent" ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Student Code <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          disabled={loading}
+                          value={parentStudentCode}
+                          onChange={(e) => setParentStudentCode(e.target.value.toUpperCase().trim())}
+                          placeholder="e.g. STU-1042"
+                          className="w-full min-h-[44px] pl-9 pr-3.5 py-2.5 text-sm font-mono tracking-wider bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#0D5C52]/20 dark:focus:ring-emerald-500/20 focus:border-[#0D5C52] transition-colors disabled:opacity-60 uppercase"
+                        />
+                        <GraduationCap className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Found on student ID card, fee receipts, or attendance SMS alerts.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Parent Mobile Number or Last 4 Digits <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          disabled={loading}
+                          value={parentPhoneOrPin}
+                          onChange={(e) => setParentPhoneOrPin(e.target.value)}
+                          placeholder="e.g. 077 123 4567 or 4567"
+                          className="w-full min-h-[44px] pl-9 pr-3.5 py-2.5 text-sm bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#0D5C52]/20 dark:focus:ring-emerald-500/20 focus:border-[#0D5C52] transition-colors disabled:opacity-60"
+                        />
+                        <Phone className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        No password required. Enter your registered mobile number or its last 4 digits.
+                      </p>
+                    </div>
+                  </>
+                ) : tab === "register" ? (
                   <>
                     <div>
                       <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
@@ -342,80 +474,108 @@ export default function HeroSection() {
                   </div>
                 )}
 
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                      Password
-                    </label>
-                    {tab === "login" && (
-                      <a href="#" className="text-xs font-medium text-[#0D5C52] dark:text-emerald-400 hover:underline">
-                        Forgot password?
-                      </a>
+                {tab !== "parent" && (
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Password
+                      </label>
+                      {tab === "login" && (
+                        <a href="#" className="text-xs font-medium text-[#0D5C52] dark:text-emerald-400 hover:underline">
+                          Forgot password?
+                        </a>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        disabled={loading}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full min-h-[44px] pl-9 pr-11 py-2.5 text-sm bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#0D5C52]/20 dark:focus:ring-emerald-500/20 focus:border-[#0D5C52] transition-colors disabled:opacity-60"
+                      />
+                      <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
+                      <button
+                        type="button"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="w-11 h-11 flex items-center justify-center absolute right-0 top-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {tab === "register" && (
+                      <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Must be at least 8 characters with at least 1 letter and 1 number.
+                      </p>
                     )}
                   </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      disabled={loading}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full min-h-[44px] pl-9 pr-11 py-2.5 text-sm bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#0D5C52]/20 dark:focus:ring-emerald-500/20 focus:border-[#0D5C52] transition-colors disabled:opacity-60"
-                    />
-                    <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
-                    <button
-                      type="button"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="w-11 h-11 flex items-center justify-center absolute right-0 top-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {tab === "register" && (
-                    <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Must be at least 8 characters with at least 1 letter and 1 number.
-                    </p>
-                  )}
-                </div>
+                )}
 
                 {/* Primary Button (44px min tap target) */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full min-h-[44px] py-2.5 px-4 text-sm font-medium rounded-lg text-white bg-[#FF5A26] hover:bg-[#E04818] active:scale-[0.99] shadow-sm transition-colors duration-150 flex items-center justify-center gap-2 mt-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`w-full min-h-[44px] py-2.5 px-4 text-sm font-medium rounded-lg text-white active:scale-[0.99] shadow-sm transition-colors duration-150 flex items-center justify-center gap-2 mt-3 disabled:opacity-70 disabled:cursor-not-allowed ${
+                    tab === "parent"
+                      ? "bg-[#0D5C52] hover:bg-[#09433c]"
+                      : "bg-[#FF5A26] hover:bg-[#E04818]"
+                  }`}
                 >
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processing...</span>
+                      <span>{tab === "parent" ? "Verifying student..." : "Processing..."}</span>
                     </>
                   ) : (
                     <>
-                      <span>{tab === "login" ? "Enter Class Portal" : "Complete Free Institute Onboarding"}</span>
+                      <span>
+                        {tab === "parent"
+                          ? "View Child's Attendance & Fees"
+                          : tab === "login"
+                          ? "Enter Class Portal"
+                          : "Complete Free Institute Onboarding"}
+                      </span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
 
-                {/* Divider */}
-                <div className="relative my-3 flex items-center justify-center">
-                  <div className="border-t border-zinc-200 dark:border-zinc-800 w-full" />
-                  <span className="bg-white dark:bg-zinc-900 px-2 text-[11px] font-mono uppercase text-zinc-400 absolute">
-                    or
-                  </span>
-                </div>
+                {tab !== "parent" ? (
+                  <>
+                    {/* Divider */}
+                    <div className="relative my-3 flex items-center justify-center">
+                      <div className="border-t border-zinc-200 dark:border-zinc-800 w-full" />
+                      <span className="bg-white dark:bg-zinc-900 px-2 text-[11px] font-mono uppercase text-zinc-400 absolute">
+                        or
+                      </span>
+                    </div>
 
-                {/* Secondary Button (44px min tap target) */}
-                <button
-                  type="button"
-                  disabled={loading}
-                  className="w-full min-h-[44px] py-2 px-4 text-sm font-medium rounded-lg bg-zinc-100 text-zinc-800 border border-zinc-200 hover:bg-zinc-200 hover:text-zinc-900 dark:bg-zinc-800/80 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-white transition-colors duration-150 active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
-                >
-                  <GoogleIcon />
-                  <span>Continue with Google</span>
-                </button>
+                    {/* Secondary Button (44px min tap target) */}
+                    <button
+                      type="button"
+                      disabled={loading}
+                      className="w-full min-h-[44px] py-2 px-4 text-sm font-medium rounded-lg bg-zinc-100 text-zinc-800 border border-zinc-200 hover:bg-zinc-200 hover:text-zinc-900 dark:bg-zinc-800/80 dark:text-zinc-200 dark:border-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-white transition-colors duration-150 active:scale-[0.99] shadow-sm flex items-center justify-center gap-2"
+                    >
+                      <GoogleIcon />
+                      <span>Continue with Google</span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="mt-3 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-[#0D5C52] dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block text-emerald-900 dark:text-emerald-200">
+                        Instant Student Academic Access
+                      </span>
+                      <span className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-normal">
+                        Check real-time gate attendance, monthly fee payment cards, homework worksheets, and schedule teacher consultations.
+                      </span>
+                    </div>
+                  </div>
+                )}
               </form>
 
               {/* Helper footnote */}
