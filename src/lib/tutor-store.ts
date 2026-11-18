@@ -102,6 +102,30 @@ export interface MockClassAssistant {
   createdAt: string;
 }
 
+export interface MockClassExam {
+  id: string;
+  tenantId: string;
+  classId: string;
+  title: string;
+  examDate: string;
+  maxMarks: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MockExamMark {
+  id: string;
+  tenantId: string;
+  examId: string;
+  classId: string;
+  studentId: string;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  remarks?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Global In-Memory Singleton
 const globalStore = globalThis as unknown as {
   mockClasses?: MockTuitionClass[];
@@ -113,6 +137,8 @@ const globalStore = globalThis as unknown as {
   mockAllocations?: MockFinancialAllocation[];
   mockAppointments?: MockParentAppointment[];
   mockAssistants?: MockClassAssistant[];
+  mockExams?: MockClassExam[];
+  mockExamMarks?: MockExamMark[];
 };
 
 if (!globalStore.mockClasses) {
@@ -370,6 +396,110 @@ if (!globalStore.mockAssistants) {
   ];
 }
 
+if (!globalStore.mockExams) {
+  globalStore.mockExams = [
+    {
+      id: "673a55555555555555550001",
+      tenantId: "673a00010000000000000000",
+      classId: "673a11111111111111110001", // Grade 8 - English
+      title: "1st Term Mid Evaluation Test",
+      examDate: "2026-11-10",
+      maxMarks: 100,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "673a55555555555555550002",
+      tenantId: "673a00010000000000000000",
+      classId: "673a11111111111111110001", // Grade 8 - English
+      title: "Grammar & Vocabulary Spot Test 01",
+      examDate: "2026-11-17",
+      maxMarks: 50,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ];
+}
+
+if (!globalStore.mockExamMarks) {
+  globalStore.mockExamMarks = [
+    // Exam 1
+    {
+      id: "673a66666666666666660001",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550001",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220001", // Kasun Sandaruwan
+      marksObtained: 84,
+      isAbsent: false,
+      remarks: "Great essay structure and vocabulary usage.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "673a66666666666666660002",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550001",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220002", // Dinithi Jayasinghe
+      marksObtained: 92,
+      isAbsent: false,
+      remarks: "Outstanding performance! Top score in class.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "673a66666666666666660003",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550001",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220003", // Tharindu Perera
+      marksObtained: null,
+      isAbsent: true,
+      remarks: "Absent due to viral flu; medical submitted.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    // Exam 2
+    {
+      id: "673a66666666666666660004",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550002",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220001", // Kasun Sandaruwan
+      marksObtained: 41,
+      isAbsent: false,
+      remarks: "Solid understanding of tenses.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "673a66666666666666660005",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550002",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220002", // Dinithi Jayasinghe
+      marksObtained: 47,
+      isAbsent: false,
+      remarks: "Perfect punctuation and spelling.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "673a66666666666666660006",
+      tenantId: "673a00010000000000000000",
+      examId: "673a55555555555555550002",
+      classId: "673a11111111111111110001",
+      studentId: "673a22222222222222220003", // Tharindu Perera
+      marksObtained: 38,
+      isAbsent: false,
+      remarks: "Good effort, revise prepositions.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ];
+}
+
 export const mockStore = {
   classes: globalStore.mockClasses,
   students: globalStore.mockStudents,
@@ -380,4 +510,6 @@ export const mockStore = {
   allocations: globalStore.mockAllocations,
   appointments: globalStore.mockAppointments,
   assistants: globalStore.mockAssistants,
+  exams: globalStore.mockExams!,
+  examMarks: globalStore.mockExamMarks!,
 };

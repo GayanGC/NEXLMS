@@ -50,6 +50,8 @@ model Tenant {
   tuteAccessRequests   TuteAccessRequest[]
   financialAllocations FinancialAllocation[]
   parentAppointments   ParentAppointment[]
+  classExams           ClassExam[]
+  examMarks            ExamMark[]
 }
 
 model User {
@@ -96,6 +98,8 @@ model TuitionClass {
   tutes              ClassTute[]
   tuteAccessRequests TuteAccessRequest[]
   parentAppointments ParentAppointment[]
+  exams              ClassExam[]
+  examMarks          ExamMark[]
 
   @@index([tenantId])
 }
@@ -118,6 +122,7 @@ model Student {
   feePayments        FeePayment[]
   tuteAccessRequests TuteAccessRequest[]
   parentAppointments ParentAppointment[]
+  examMarks          ExamMark[]
 
   @@unique([tenantId, studentCode])
   @@index([tenantId, classId])
@@ -227,4 +232,43 @@ model ParentAppointment {
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, classId, status])
+}
+
+model ClassExam {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String     @db.ObjectId
+  classId      String     @db.ObjectId
+  title        String     // e.g., "1st Term Paper", "Unit 04 Spot Test"
+  examDate     String     // YYYY-MM-DD
+  maxMarks     Float      @default(100)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class        TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  marks        ExamMark[]
+
+  @@index([tenantId, classId])
+}
+
+model ExamMark {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String     @db.ObjectId
+  examId        String     @db.ObjectId
+  classId       String     @db.ObjectId
+  studentId     String     @db.ObjectId
+  marksObtained Float?
+  isAbsent      Boolean    @default(false)
+  remarks       String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  exam          ClassExam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  class         TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student       Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([tenantId, examId])
+  @@index([studentId])
 }

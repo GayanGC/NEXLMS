@@ -234,3 +234,41 @@ export const ParentVerifySchema = z.object({
 });
 
 export type ParentVerifyInput = z.infer<typeof ParentVerifySchema>;
+
+// 11. Create Exam Schema
+export const CreateExamSchema = z.object({
+  classId: MongoIdSchema,
+  title: z
+    .string()
+    .trim()
+    .min(2, "Exam title must be at least 2 characters")
+    .max(100, "Title is too long"),
+  examDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Exam date must be formatted as YYYY-MM-DD"),
+  maxMarks: z
+    .number()
+    .min(1, "Maximum marks must be greater than 0")
+    .max(1000, "Maximum marks cannot exceed 1000")
+    .default(100),
+});
+
+export type CreateExamInput = z.infer<typeof CreateExamSchema>;
+
+// 12. Bulk Save Marks Schema
+export const BulkSaveMarksSchema = z.object({
+  examId: MongoIdSchema,
+  marks: z
+    .array(
+      z.object({
+        studentId: MongoIdSchema,
+        marksObtained: z.number().min(0, "Marks cannot be negative").nullable().optional(),
+        isAbsent: z.boolean().default(false),
+        remarks: z.string().trim().max(200, "Remarks too long").optional().nullable(),
+      })
+    )
+    .min(1, "At least one student mark record is required"),
+});
+
+export type BulkSaveMarksInput = z.infer<typeof BulkSaveMarksSchema>;

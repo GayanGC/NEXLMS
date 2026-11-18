@@ -9,6 +9,7 @@ import {
   DollarSign,
   CalendarCheck,
   UserCheck,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface TabItem {
@@ -22,8 +23,9 @@ interface TabItem {
 const navTabs: TabItem[] = [
   { label: "Overview", shortLabel: "Overview", href: "/portal/teacher", icon: LayoutDashboard },
   { label: "Tutes & Requests", shortLabel: "Tutes", href: "/portal/teacher/tutes", icon: FileText },
-  { label: "Finance & Profit", shortLabel: "Finance", href: "/portal/teacher/finance", icon: DollarSign, requiresTeacher: true },
+  { label: "Exams & Reports", shortLabel: "Exams", href: "/portal/teacher/exams", icon: ClipboardCheck },
   { label: "Appointments & Summons", shortLabel: "Summons", href: "/portal/teacher/appointments", icon: CalendarCheck },
+  { label: "Finance & Profit", shortLabel: "Finance", href: "/portal/teacher/finance", icon: DollarSign, requiresTeacher: true },
   { label: "Class Assistant", shortLabel: "Assistant", href: "/portal/teacher/assistant", icon: UserCheck, requiresTeacher: true },
 ];
 

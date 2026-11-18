@@ -18,6 +18,9 @@ import {
   X,
   Loader2,
   Lock,
+  Award,
+  Printer,
+  TrendingUp,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -68,6 +71,21 @@ interface TuteRequest {
   status: "PENDING" | "APPROVED" | "REJECTED";
 }
 
+interface ExamResult {
+  examId: string;
+  title: string;
+  examDate: string;
+  maxMarks: number;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  remarks?: string | null;
+  percentage: number | null;
+  grade: string;
+  classAverage: number;
+  rank: number | null;
+  totalParticipants: number;
+}
+
 interface VerifiedData {
   student: {
     id: string;
@@ -92,6 +110,26 @@ interface VerifiedData {
   tutes: ClassTute[];
   appointments: Appointment[];
   tuteRequests: TuteRequest[];
+  examResults?: ExamResult[];
+}
+
+function getGradeColor(grade: string) {
+  switch (grade) {
+    case "A":
+      return "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800";
+    case "B":
+      return "bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-800";
+    case "C":
+      return "bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800";
+    case "S":
+      return "bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800";
+    case "W":
+      return "bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800";
+    case "AB":
+      return "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700";
+    default:
+      return "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700";
+  }
 }
 
 export default function ParentPortalPage() {
@@ -419,11 +457,25 @@ function ParentPortalContent() {
       ? Math.round((presentAttendance / verifiedData.attendance.length) * 100)
       : 100;
 
+  const exams = verifiedData.examResults || [];
+  const completedExams = exams.filter((e) => !e.isAbsent && e.marksObtained !== null);
+  const averagePercentage =
+    completedExams.length > 0
+      ? Math.round(
+          completedExams.reduce((acc, curr) => acc + (curr.percentage || 0), 0) /
+            completedExams.length
+        )
+      : null;
+  const highestScore =
+    completedExams.length > 0
+      ? Math.max(...completedExams.map((e) => e.percentage || 0))
+      : null;
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 py-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Navigation Bar */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800 print:hidden">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             <span className="font-bold text-sm tracking-tight text-zinc-950 dark:text-white">
@@ -460,7 +512,14 @@ function ParentPortalContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:self-center">
+          <div className="flex items-center gap-2 sm:self-center flex-wrap print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="min-h-[44px] px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 text-zinc-800 dark:text-zinc-200 text-xs font-medium rounded-xl shadow-sm flex items-center gap-1.5 transition-colors"
+            >
+              <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+              <span>Print Report</span>
+            </button>
             <button
               onClick={() => setIsAppointmentModalOpen(true)}
               className="min-h-[44px] px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 text-zinc-800 dark:text-zinc-200 text-xs font-medium rounded-xl shadow-sm flex items-center gap-1.5 transition-colors"
@@ -473,7 +532,7 @@ function ParentPortalContent() {
 
         {/* URGENT TEACHER SUMMONS ALERT BANNER */}
         {urgentSummons.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3 print:hidden">
             {urgentSummons.map((summon) => (
               <div
                 key={summon.id}
@@ -501,7 +560,7 @@ function ParentPortalContent() {
 
         {/* ACTIVE CLASS BROADCAST NOTICE */}
         {verifiedData.class.activeNotice && (
-          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs flex items-start gap-3">
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs flex items-start gap-3 print:hidden">
             <MessageSquare className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <strong className="text-amber-900 dark:text-amber-200">Class Announcement:</strong>
@@ -511,6 +570,185 @@ function ParentPortalContent() {
             </div>
           </div>
         )}
+
+        {/* ACADEMIC PERFORMANCE & STUDENT REPORT CARD */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-[#0D5C52] dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-zinc-950 dark:text-white flex items-center gap-2">
+                  Academic Performance & Report Card
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Continuous evaluations, term assessments & class rank tracking
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="self-start sm:self-auto min-h-[44px] px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-medium rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center gap-2 transition-colors print:hidden"
+            >
+              <Printer className="w-4 h-4 text-zinc-500" />
+              <span>Print Progress Report</span>
+            </button>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800/80 space-y-1">
+              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                Overall Average
+              </span>
+              <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-zinc-900 dark:text-zinc-100 tabular-nums">
+                {averagePercentage !== null ? `${averagePercentage}%` : "—"}
+              </div>
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block">
+                {completedExams.length} evaluation{completedExams.length !== 1 ? "s" : ""} counted
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800/80 space-y-1">
+              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                Highest Score
+              </span>
+              <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
+                {highestScore !== null ? `${highestScore}%` : "—"}
+              </div>
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block">
+                Best individual test
+              </span>
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800/80 space-y-1">
+              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                Completed Tests
+              </span>
+              <div className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-zinc-900 dark:text-zinc-100 tabular-nums">
+                {completedExams.length} / {exams.length}
+              </div>
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block">
+                {exams.filter((e) => e.isAbsent).length > 0
+                  ? `${exams.filter((e) => e.isAbsent).length} absent`
+                  : "All tests attended"}
+              </span>
+            </div>
+          </div>
+
+          {/* Exam Table / Cards */}
+          {exams.length === 0 ? (
+            <div className="p-8 text-center rounded-xl bg-zinc-50/50 dark:bg-zinc-800/20 border border-dashed border-zinc-200 dark:border-zinc-800 space-y-1.5">
+              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                No Exam Marks Published Yet
+              </p>
+              <p className="text-[11px] text-zinc-400 max-w-sm mx-auto">
+                Test evaluation records and term rankings will appear here as soon as they are graded and released by the tutor.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Evaluation Breakdown
+              </h3>
+              <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                      <th className="py-2.5 pr-4">Exam / Test</th>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Score</th>
+                      <th className="py-2.5 px-3">Grade</th>
+                      <th className="py-2.5 px-3">Rank</th>
+                      <th className="py-2.5 pl-3">Class Avg</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {exams.map((res) => {
+                      const diff =
+                        res.percentage !== null && res.classAverage !== null
+                          ? Math.round(res.percentage - res.classAverage)
+                          : null;
+                      return (
+                        <tr key={res.examId} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="py-3 pr-4">
+                            <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                              {res.title}
+                            </div>
+                            {res.remarks && (
+                              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 italic mt-0.5">
+                                &quot;{res.remarks}&quot;
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                            {res.examDate}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {res.isAbsent ? (
+                              <span className="font-mono text-zinc-400 font-bold">AB</span>
+                            ) : (
+                              <div className="font-mono tabular-nums">
+                                <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">
+                                  {res.marksObtained}
+                                </span>
+                                <span className="text-zinc-400 text-[11px]"> / {res.maxMarks}</span>
+                                {res.percentage !== null && (
+                                  <span className="text-[10px] text-zinc-500 block">
+                                    {Math.round(res.percentage)}%
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono border ${getGradeColor(
+                                res.grade
+                              )}`}
+                            >
+                              Grade {res.grade}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {res.rank ? (
+                              <div className="inline-flex items-center gap-1 font-mono font-bold text-xs text-zinc-900 dark:text-zinc-100">
+                                <span>#{res.rank}</span>
+                                <span className="text-zinc-400 font-normal text-[10px]">
+                                  of {res.totalParticipants}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400 font-mono text-[11px]">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 pl-3 whitespace-nowrap">
+                            <div className="font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                              {res.classAverage}%
+                            </div>
+                            {diff !== null && (
+                              <span
+                                className={`text-[10px] font-mono font-medium ${
+                                  diff >= 0
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-rose-600 dark:text-rose-400"
+                                }`}
+                              >
+                                {diff >= 0 ? `+${diff}%` : `${diff}%`}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 2-COLUMN SECTION: ATTENDANCE & FEES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

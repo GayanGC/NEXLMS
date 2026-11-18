@@ -81,6 +81,7 @@ export async function POST(
     let tutes: any[] = [];
     let appointments: any[] = [];
     let tuteRequests: any[] = [];
+    let examResults: any[] = [];
 
     try {
       student = await prisma.student.findFirst({
@@ -130,6 +131,56 @@ export async function POST(
         tuteRequests = await prisma.tuteAccessRequest.findMany({
           where: { studentId: student.id },
         });
+
+        // Fetch student class exams and marks
+        const classExams = await prisma.classExam.findMany({
+          where: { classId: student.classId, tenantId: student.tenantId },
+          orderBy: { examDate: "desc" },
+          include: {
+            marks: true,
+          },
+        });
+
+        examResults = classExams.map((exam) => {
+          const studentMark = exam.marks.find((m) => m.studentId === student.id);
+          const marksObtained = studentMark?.marksObtained ?? null;
+          const isAbsent = studentMark?.isAbsent ?? false;
+          const remarks = studentMark?.remarks ?? "";
+
+          const percentage = marksObtained !== null ? Math.round((marksObtained / exam.maxMarks) * 100) : null;
+          let grade = "-";
+          if (isAbsent) grade = "AB";
+          else if (percentage !== null) {
+            if (percentage >= 75) grade = "A";
+            else if (percentage >= 65) grade = "B";
+            else if (percentage >= 50) grade = "C";
+            else if (percentage >= 35) grade = "S";
+            else grade = "W";
+          }
+
+          const validMarks = exam.marks.filter((m) => !m.isAbsent && m.marksObtained !== null);
+          const totalScore = validMarks.reduce((acc, curr) => acc + (curr.marksObtained || 0), 0);
+          const classAverage = validMarks.length > 0 ? Math.round((totalScore / validMarks.length) * 10) / 10 : 0;
+
+          const sorted = [...validMarks].sort((a, b) => (b.marksObtained || 0) - (a.marksObtained || 0));
+          const rankIdx = sorted.findIndex((m) => m.studentId === student.id);
+          const rank = rankIdx >= 0 ? rankIdx + 1 : null;
+
+          return {
+            examId: exam.id,
+            title: exam.title,
+            examDate: exam.examDate,
+            maxMarks: exam.maxMarks,
+            marksObtained,
+            isAbsent,
+            remarks,
+            percentage,
+            grade,
+            classAverage,
+            rank,
+            totalParticipants: validMarks.length,
+          };
+        });
       }
     } catch {
       student = mockStore.students.find((s) => s.studentCode.toUpperCase() === code);
@@ -154,6 +205,52 @@ export async function POST(
         tutes = mockStore.tutes.filter((t) => t.classId === student.classId);
         appointments = mockStore.appointments.filter((a) => a.studentId === student.id);
         tuteRequests = mockStore.tuteRequests.filter((r) => r.studentId === student.id);
+
+        const classExams = mockStore.exams
+          .filter((e) => e.classId === student.classId)
+          .sort((a, b) => b.examDate.localeCompare(a.examDate));
+
+        examResults = classExams.map((exam) => {
+          const allMarks = mockStore.examMarks.filter((m) => m.examId === exam.id);
+          const studentMark = allMarks.find((m) => m.studentId === student.id);
+          const marksObtained = studentMark?.marksObtained ?? null;
+          const isAbsent = studentMark?.isAbsent ?? false;
+          const remarks = studentMark?.remarks ?? "";
+
+          const percentage = marksObtained !== null ? Math.round((marksObtained / exam.maxMarks) * 100) : null;
+          let grade = "-";
+          if (isAbsent) grade = "AB";
+          else if (percentage !== null) {
+            if (percentage >= 75) grade = "A";
+            else if (percentage >= 65) grade = "B";
+            else if (percentage >= 50) grade = "C";
+            else if (percentage >= 35) grade = "S";
+            else grade = "W";
+          }
+
+          const validMarks = allMarks.filter((m) => !m.isAbsent && m.marksObtained !== null);
+          const totalScore = validMarks.reduce((acc, curr) => acc + (curr.marksObtained || 0), 0);
+          const classAverage = validMarks.length > 0 ? Math.round((totalScore / validMarks.length) * 10) / 10 : 0;
+
+          const sorted = [...validMarks].sort((a, b) => (b.marksObtained || 0) - (a.marksObtained || 0));
+          const rankIdx = sorted.findIndex((m) => m.studentId === student.id);
+          const rank = rankIdx >= 0 ? rankIdx + 1 : null;
+
+          return {
+            examId: exam.id,
+            title: exam.title,
+            examDate: exam.examDate,
+            maxMarks: exam.maxMarks,
+            marksObtained,
+            isAbsent,
+            remarks,
+            percentage,
+            grade,
+            classAverage,
+            rank,
+            totalParticipants: validMarks.length,
+          };
+        });
       }
     }
 
@@ -192,6 +289,7 @@ export async function POST(
         tutes,
         appointments,
         tuteRequests,
+        examResults,
       });
     }
 
