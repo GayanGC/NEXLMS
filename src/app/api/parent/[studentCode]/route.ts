@@ -1,0 +1,254 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { mockStore } from "@/lib/tutor-store";
+import crypto from "crypto";
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ studentCode: string }> }
+) {
+  try {
+    const { studentCode } = await params;
+    const code = studentCode?.toUpperCase().trim();
+
+    try {
+      const student = await prisma.student.findFirst({
+        where: { studentCode: code },
+        include: {
+          class: true,
+          tenant: true,
+        },
+      });
+
+      if (!student) {
+        return NextResponse.json({ success: false, error: "Student code not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        studentName: student.fullName,
+        studentCode: student.studentCode,
+        classTitle: student.class.title,
+        instituteName: student.tenant.name,
+      });
+    } catch {
+      // Local dev fallback
+      const student = mockStore.students.find((s) => s.studentCode.toUpperCase() === code);
+      if (!student) {
+        return NextResponse.json({ success: false, error: "Student code not found" }, { status: 404 });
+      }
+      const cls = mockStore.classes.find((c) => c.id === student.classId);
+      return NextResponse.json({
+        success: true,
+        studentName: student.fullName,
+        studentCode: student.studentCode,
+        classTitle: cls?.title || "Tuition Class",
+        instituteName: "Bandara Physics Academy",
+      });
+    }
+  } catch (error) {
+    console.error("[Parent API] GET error:", error);
+    return NextResponse.json({ success: false, error: "Failed to load student" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ studentCode: string }> }
+) {
+  try {
+    const { studentCode } = await params;
+    const code = studentCode?.toUpperCase().trim();
+    const body = await request.json();
+    const { action, last4Phone } = body;
+
+    if (!last4Phone || last4Phone.length !== 4) {
+      return NextResponse.json(
+        { success: false, error: "Please enter the last 4 digits of the registered parent phone number" },
+        { status: 400 }
+      );
+    }
+
+    // Verify student and phone
+    let student: any = null;
+    let cls: any = null;
+    let attendance: any[] = [];
+    let fees: any[] = [];
+    let tutes: any[] = [];
+    let appointments: any[] = [];
+    let tuteRequests: any[] = [];
+
+    try {
+      student = await prisma.student.findFirst({
+        where: { studentCode: code },
+        include: { class: true, tenant: true },
+      });
+
+      if (student) {
+        cls = student.class;
+        const phone = student.parentPhone.replace(/\D/g, "");
+        if (!phone.endsWith(last4Phone)) {
+          return NextResponse.json(
+            { success: false, error: "Verification failed. The last 4 digits do not match our records." },
+            { status: 401 }
+          );
+        }
+
+        // Fetch child data
+        attendance = await prisma.attendanceRecord.findMany({
+          where: { studentId: student.id },
+          orderBy: { date: "desc" },
+          take: 30,
+        });
+
+        fees = await prisma.feePayment.findMany({
+          where: { studentId: student.id },
+          orderBy: { month: "desc" },
+          take: 12,
+        });
+
+        tutes = await prisma.classTute.findMany({
+          where: { classId: student.classId },
+          orderBy: { createdAt: "desc" },
+        });
+
+        appointments = await prisma.parentAppointment.findMany({
+          where: { studentId: student.id },
+          orderBy: { createdAt: "desc" },
+        });
+
+        tuteRequests = await prisma.tuteAccessRequest.findMany({
+          where: { studentId: student.id },
+        });
+      }
+    } catch {
+      student = mockStore.students.find((s) => s.studentCode.toUpperCase() === code);
+      if (student) {
+        cls = mockStore.classes.find((c) => c.id === student.classId);
+        const phone = student.parentPhone.replace(/\D/g, "");
+        if (!phone.endsWith(last4Phone)) {
+          return NextResponse.json(
+            { success: false, error: "Verification failed. The last 4 digits do not match our records." },
+            { status: 401 }
+          );
+        }
+
+        attendance = mockStore.attendance.filter((a) => a.studentId === student.id);
+        fees = mockStore.fees.filter((f) => f.studentId === student.id);
+        tutes = mockStore.tutes.filter((t) => t.classId === student.classId);
+        appointments = mockStore.appointments.filter((a) => a.studentId === student.id);
+        tuteRequests = mockStore.tuteRequests.filter((r) => r.studentId === student.id);
+      }
+    }
+
+    if (!student) {
+      return NextResponse.json({ success: false, error: "Student not found" }, { status: 404 });
+    }
+
+    // Handle Actions
+    if (action === "VERIFY") {
+      return NextResponse.json({
+        success: true,
+        verified: true,
+        student: {
+          id: student.id,
+          fullName: student.fullName,
+          studentCode: student.studentCode,
+          parentName: student.parentName,
+          parentPhone: student.parentPhone,
+          isFreeCard: student.isFreeCard,
+        },
+        class: {
+          id: cls?.id,
+          title: cls?.title,
+          subject: cls?.subject,
+          grade: cls?.grade,
+          monthlyFee: cls?.monthlyFee,
+          scheduleText: cls?.scheduleText,
+          activeNotice: cls?.activeNotice,
+          enableTutes: cls?.enableTutes,
+        },
+        attendance,
+        fees,
+        tutes,
+        appointments,
+        tuteRequests,
+      });
+    }
+
+    if (action === "APPOINTMENT_REQUEST") {
+      const { requestedDate, reason } = body;
+      if (!requestedDate || !reason) {
+        return NextResponse.json({ success: false, error: "Date and reason are required" }, { status: 400 });
+      }
+
+      try {
+        const app = await prisma.parentAppointment.create({
+          data: {
+            tenantId: student.tenantId,
+            classId: student.classId,
+            studentId: student.id,
+            initiatedBy: "PARENT",
+            requestedDate,
+            reason,
+            status: "PENDING",
+          },
+        });
+        return NextResponse.json({ success: true, appointment: app });
+      } catch {
+        const app = {
+          id: "app-" + crypto.randomBytes(3).toString("hex"),
+          tenantId: student.tenantId,
+          classId: student.classId,
+          studentId: student.id,
+          initiatedBy: "PARENT" as const,
+          requestedDate,
+          reason,
+          status: "PENDING" as const,
+          createdAt: new Date().toISOString(),
+        };
+        mockStore.appointments.unshift(app);
+        return NextResponse.json({ success: true, appointment: app });
+      }
+    }
+
+    if (action === "TUTE_REQUEST") {
+      const { tuteId, reason } = body;
+      if (!tuteId || !reason) {
+        return NextResponse.json({ success: false, error: "Tute selection and reason are required" }, { status: 400 });
+      }
+
+      try {
+        const req = await prisma.tuteAccessRequest.create({
+          data: {
+            tenantId: student.tenantId,
+            classId: student.classId,
+            studentId: student.id,
+            tuteId,
+            reason,
+            status: "PENDING",
+          },
+        });
+        return NextResponse.json({ success: true, request: req });
+      } catch {
+        const req = {
+          id: "req-" + crypto.randomBytes(3).toString("hex"),
+          tenantId: student.tenantId,
+          classId: student.classId,
+          studentId: student.id,
+          tuteId,
+          reason,
+          status: "PENDING" as const,
+          createdAt: new Date().toISOString(),
+        };
+        mockStore.tuteRequests.unshift(req);
+        return NextResponse.json({ success: true, request: req });
+      }
+    }
+
+    return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error("[Parent API] POST error:", error);
+    return NextResponse.json({ success: false, error: "Failed to process request" }, { status: 500 });
+  }
+}

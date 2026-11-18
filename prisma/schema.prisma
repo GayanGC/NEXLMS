@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantType {
+  SOLO_TEACHER
+  INSTITUTE
+  HYBRID_OWNER
+}
+
+enum Role {
+  SUPER_ADMIN
+  INSTITUTE_ADMIN
+  SOLO_TEACHER
+  CLASS_ASSISTANT
+  MANAGER
+  CASHIER
+  ATTENDANCE_CHECKER
+  STUDENT
+  PARENT
+}
+
+enum AccountStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+model Tenant {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  slug         String     @unique
+  tenantType   TenantType
+  studentScale String
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  users                User[]
+  tuitionClasses       TuitionClass[]
+  students             Student[]
+  attendanceRecords    AttendanceRecord[]
+  feePayments          FeePayment[]
+  tutes                ClassTute[]
+  tuteAccessRequests   TuteAccessRequest[]
+  financialAllocations FinancialAllocation[]
+  parentAppointments   ParentAppointment[]
+}
+
+model User {
+  id                 String        @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String        @db.ObjectId
+  role               Role
+  fullName           String
+  email              String?
+  phone              String
+  passwordHash       String
+  permissions        String[]      @default([]) // For CLASS_ASSISTANT: ["ATTENDANCE", "FEES", "TUTES"]
+  supervisorId       String?       @db.ObjectId
+  status             AccountStatus @default(ACTIVE)
+  archiveReason      String?
+  archivedAt         DateTime?
+  canRestoreUntil    DateTime?
+  activeSessionToken String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, role])
+}
+
+model TuitionClass {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String   @db.ObjectId
+  title        String   // e.g. "Grade 8 - English"
+  subject      String
+  grade        String
+  monthlyFee   Float
+  scheduleText String   // e.g. "Sundays 08:30 AM - 11:30 AM"
+  enableTutes  Boolean  @default(false)
+  activeNotice String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  students           Student[]
+  attendanceRecords  AttendanceRecord[]
+  feePayments        FeePayment[]
+  tutes              ClassTute[]
+  tuteAccessRequests TuteAccessRequest[]
+  parentAppointments ParentAppointment[]
+
+  @@index([tenantId])
+}
+
+model Student {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   @db.ObjectId
+  classId     String   @db.ObjectId
+  studentCode String   // Unique per tenant e.g. "STU-1042"
+  fullName    String
+  parentName  String?
+  parentPhone String
+  isFreeCard  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class              TuitionClass        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attendanceRecords  AttendanceRecord[]
+  feePayments        FeePayment[]
+  tuteAccessRequests TuteAccessRequest[]
+  parentAppointments ParentAppointment[]
+
+  @@unique([tenantId, studentCode])
+  @@index([tenantId, classId])
+}
+
+model AttendanceRecord {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  classId   String   @db.ObjectId
+  studentId String   @db.ObjectId
+  date      String   // YYYY-MM-DD
+  status    String   // "PRESENT" | "ABSENT"
+  method    String   // "MANUAL_TAP" | "QR_SCAN"
+  createdAt DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class   TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId, date])
+  @@index([tenantId, classId, date])
+}
+
+model FeePayment {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String    @db.ObjectId
+  classId   String    @db.ObjectId
+  studentId String    @db.ObjectId
+  month     String    // YYYY-MM
+  amount    Float
+  status    String    // "PAID" | "UNPAID"
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class   TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId, month])
+  @@index([tenantId, classId, month])
+}
+
+model ClassTute {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  classId   String   @db.ObjectId
+  title     String
+  month     String   // e.g. "November 2026"
+  fileUrl   String
+  createdAt DateTime @default(now())
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class              TuitionClass        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  tuteAccessRequests TuteAccessRequest[]
+
+  @@index([tenantId, classId])
+}
+
+model TuteAccessRequest {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  classId   String   @db.ObjectId
+  studentId String   @db.ObjectId
+  tuteId    String   @db.ObjectId
+  reason    String
+  status    String   @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  createdAt DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class   TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tute    ClassTute    @relation(fields: [tuteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, classId, status])
+}
+
+model FinancialAllocation {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String   @db.ObjectId
+  month           String   // YYYY-MM
+  title           String   // e.g. "Car Leasing", "Hall Rent", "Monthly Savings"
+  category        String   // "CLASS_EXPENSE" | "PERSONAL_GOAL" | "SAVINGS"
+  allocatedAmount Float
+  createdAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, month])
+}
+
+model ParentAppointment {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String   @db.ObjectId
+  classId       String   @db.ObjectId
+  studentId     String   @db.ObjectId
+  initiatedBy   String   // "PARENT" | "TEACHER"
+  requestedDate String   // YYYY-MM-DD
+  confirmedDate String?  // YYYY-MM-DD
+  confirmedTime String?  // e.g. "10:30 AM"
+  reason        String
+  teacherNote   String?
+  status        String   @default("PENDING") // "PENDING" | "APPROVED" | "RESCHEDULED" | "COMPLETED"
+  createdAt     DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class   TuitionClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, classId, status])
+}
